@@ -1,0 +1,43 @@
+{$CHATBOTX_DOMAIN} {
+	# No body/query access logging: webhook bodies and signed URLs contain customer data.
+	encode zstd gzip
+	header -Server
+
+	# First rollout supports ONE Telegram bot. Unknown bots and missing secrets fail closed.
+	# Native ChatbotX reconnect resets the webhook: rerun register-telegram.py afterwards.
+	handle /integrations/* {
+		handle /integrations/telegram/* {
+			@verified {
+				query botId={$TELEGRAM_BOT_ID}
+				expression {http.request.uri.query} == "botId={$TELEGRAM_BOT_ID}"
+				header X-Telegram-Bot-Api-Secret-Token {$TELEGRAM_WEBHOOK_SECRET}
+			}
+			handle @verified {
+				reverse_proxy builder:3000
+			}
+			handle {
+				respond "Webhook verification required" 403
+			}
+		}
+		# Upstream normalizes channel names. An explicit canonical allowlist blocks
+		# aliases such as /integrations/Telegram/webhook from bypassing the guard.
+		@canonical path /integrations/whatsapp/* /integrations/messenger/* /integrations/instagram/* /integrations/tiktok/* /integrations/threads/* /integrations/webchat/* /integrations/zalo/* /integrations/email/* /integrations/api/* /integrations/instagram-facebook/* /integrations/instagramFacebook/* /integrations/facebook-ads/* /integrations/facebookAds/* /integrations/google-calendar/* /integrations/googleCalendar/* /integrations/google-sheets/* /integrations/googleSheets/* /integrations/active-campaign/* /integrations/activeCampaign/* /integrations/get-response/* /integrations/getResponse/* /integrations/mailer-lite/* /integrations/mailerLite/* /integrations/send-grid/* /integrations/sendGrid/* /integrations/smtp/* /integrations/drip/* /integrations/klaviyo/* /integrations/mailchimp/* /integrations/moosend/* /integrations/chatbotx/*
+		handle @canonical {
+			reverse_proxy builder:3000
+		}
+		handle {
+			respond "Unknown integration route" 404
+		}
+	}
+	handle_path /ws/* {
+		reverse_proxy realtime:1999
+	}
+	# Preserve the signed S3 path AND Host. Same origin avoids browser CORS issues.
+	@storage path /chatbotx /chatbotx/*
+	handle @storage {
+		reverse_proxy filesystem:9000
+	}
+	handle {
+		reverse_proxy builder:3000
+	}
+}

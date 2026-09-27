@@ -1,0 +1,21 @@
+{
+  "id": "vinchi",
+  "displayName": "VINCHI Support",
+  "slug": "vinchi-support",
+  "scheme": "vinchisupport",
+  "ios": {
+    "bundleIdentifier": "com.example.vinchi.support"
+  },
+  "android": {
+    "package": "com.example.vinchi.support",
+    "adaptiveIconBackgroundColor": "#ffffff"
+  },
+  "colors": {
+    "brand": "#167C6B",
+    "splashBackground": "#FFFFFF"
+  },
+  "eas": {
+    "projectId": "",
+    "owner": ""
+  }
+}
