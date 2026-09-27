@@ -1,3 +1,13 @@
+# VINCHI staging deployment
+
+ابدأ من **[دليل فينشي العربي خطوة بخطوة](vinchi/README_AR.md)**. إعداد فينشي في `vinchi/compose.yaml`؛ شغّل أوامره من داخل مجلد `vinchi/`.
+
+This fork adds a staged VINCHI configuration under [`vinchi/`](vinchi/), with generated secrets, private datastore ports, explicit migrations and a Telegram webhook guard. **This is a staging candidate; the full stack and live channels are not connected or validated yet.** See [architecture and review](vinchi/ARCHITECTURE.md) and [local test commands](vinchi/tests/README.md).
+
+The upstream README and root example configuration are retained below.
+
+---
+
 <p align="center">
   <a href="https://github.com/ChatbotXIO/ChatbotX" target="_blank" rel="noopener">
     <picture>

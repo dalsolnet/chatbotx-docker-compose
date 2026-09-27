@@ -1,0 +1,33 @@
+{
+  "ChatbotX": {
+    "url": "https://github.com/ChatbotXIO/ChatbotX",
+    "reviewedCommit": "5742fe49a9177881330559e606fd063b74cfc11a"
+  },
+  "chatbotx-docker-compose": {
+    "url": "https://github.com/ChatbotXIO/chatbotx-docker-compose",
+    "reviewedCommit": "1b71fc4fe9e21cebbf868e1f1474e8d99a7ca27e"
+  },
+  "chatbotx-mobile-app": {
+    "url": "https://github.com/ChatbotXIO/chatbotx-mobile-app",
+    "reviewedCommit": "c991761a85ad8647294b6b5bb923ee8daf6d8744"
+  },
+  "chatbotx-n8n": {
+    "url": "https://github.com/ChatbotXIO/chatbotx-n8n",
+    "reviewedCommit": "d3b3eec649690823268179b4f4db5737b07f006f"
+  },
+  "chatbotx-agent": {
+    "url": "https://github.com/ChatbotXIO/chatbotx-agent",
+    "reviewedCommit": "5cd7f16f70b97537bff945cf165db12397db1a89"
+  },
+  "deployment": {
+    "candidateRelease": "1.10.0",
+    "releaseCommit": "138cba609e63a9a185a3ce836625afa52d5b92e9",
+    "imagesPulled": false,
+    "runtimeValidated": false,
+    "reviewDate": "2026-09-27",
+    "edition": "community",
+    "targetedReleaseContractReview": true,
+    "caddyStandaloneValidated": true,
+    "caddyLoopbackRoutingTested": true
+  }
+}
