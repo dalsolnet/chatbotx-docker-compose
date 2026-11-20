@@ -5,7 +5,9 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 
@@ -64,9 +66,6 @@ def release_candidate(release):
 def propose(release, base_branch, repository):
     release_id = int(release["id"])
     branch = f"upstream/chatbotx-release-{release_id}"
-    if json.loads(command("gh", "pr", "list", "--repo", repository,
-                          "--head", branch, "--state", "all", "--limit", "1", "--json", "number")):
-        return
     candidate = release_candidate(release)
     tag = candidate["release"]
     target = Path("upstream-releases") / f"{tag}.json"
@@ -80,7 +79,6 @@ def propose(release, base_branch, repository):
         if command("git", "show", f"FETCH_HEAD:{target.as_posix()}") != payload.strip():
             raise ValueError(f"Existing branch {branch} has different release data. Review it manually.")
     else:
-        import tempfile
         with tempfile.TemporaryDirectory() as temporary:
             worktree = Path(temporary) / "checkout"
             command("git", "worktree", "add", "--detach", str(worktree), "HEAD")
@@ -95,13 +93,12 @@ def propose(release, base_branch, repository):
                 command("git", "push", "origin", f"HEAD:refs/heads/{branch}", directory=worktree)
             finally:
                 command("git", "worktree", "remove", str(worktree))
-    command("gh", "pr", "create", "--repo", repository, "--base", base_branch, "--head", branch,
-            "--draft", "--title", f"Review official ChatbotX {tag}",
-            "--body", f"Official release: {candidate['url']}\n\n"
-                      f"Source commit: `{candidate['commit']}`. The proposed JSON records all four "
-                      "verified vendor image digests. This is a release record for review. "
-                      "Review intervening migrations and rebuild or port VINCHI customizations "
-                      "before using any of these images with customer data.")
+    compare = f"https://github.com/{repository}/compare/{quote(base_branch, safe='')}...{quote(branch, safe='')}?expand=1"
+    summary = f"- [{tag}]({compare}) · official source commit `{candidate['commit']}`\n"
+    if os.getenv("GITHUB_STEP_SUMMARY"):
+        with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as output:
+            output.write(summary)
+    print(f"{tag}: saved for review at {compare}")
 
 
 def main():
@@ -118,7 +115,7 @@ def main():
             failures.append(release["tag_name"])
             print(f"{release['tag_name']}: {failure}", file=sys.stderr)
     if failures:
-        sys.exit(f"Could not verify or propose {', '.join(failures)}. These will be checked again.")
+        sys.exit(f"Could not verify or save {', '.join(failures)}. These will be checked again.")
 
 
 if __name__ == "__main__":
