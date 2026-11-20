@@ -1,0 +1,12 @@
+{
+  "release": "v1.22.0",
+  "published_at": "2026-11-18T03:31:03Z",
+  "url": "https://github.com/ChatbotXIO/ChatbotX/releases/tag/v1.22.0",
+  "commit": "dcb9d140126729bb85649d80f811e3589c7d45b5",
+  "images": {
+    "builder": "ghcr.io/chatbotxio/chatbotx-builder:1.22.0@sha256:b79a619d8d1a4e2665fb5db39b62dfc34fcb1b72a4ec60177497f2a260a0ce05",
+    "worker": "ghcr.io/chatbotxio/chatbotx-worker:1.22.0@sha256:9636977f8c5ba42cc0c55a7f47caee88cc4f5bbbcb2d2ec6488e1b6526757f1f",
+    "realtime": "ghcr.io/chatbotxio/chatbotx-realtime:1.22.0@sha256:326666c9f5ecde3c4decf682a058843b0e37b0f228e90c2bec0febff94532b7e",
+    "javascript-executor": "ghcr.io/chatbotxio/chatbotx-javascript-executor:1.22.0@sha256:c29ce4746cd4af851f255a48f809e9a7f84e28d30cfabf088dc1a3e33402a819"
+  }
+}
