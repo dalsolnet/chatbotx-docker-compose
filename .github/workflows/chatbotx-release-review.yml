@@ -1,0 +1,36 @@
+name: Track official ChatbotX releases
+
+on:
+  schedule:
+    - cron: '23 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Verify releases and images without proposing changes
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: chatbotx-upstream-release-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    # Scheduled workflows in forks must be enabled explicitly.
+    if: github.repository == 'dalsolnet/chatbotx-docker-compose'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Check releases and propose review files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python3 scripts/track-chatbotx-releases.py
