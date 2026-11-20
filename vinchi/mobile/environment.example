@@ -1,0 +1,4 @@
+BRAND=vinchi
+APP_ENV=development
+API_BASE_URL=https://support.example.com
+WS_URL=https://support.example.com/ws

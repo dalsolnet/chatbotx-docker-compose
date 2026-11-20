@@ -1,0 +1,311 @@
+# VINCHI staging baseline. Derived from ChatbotXIO/chatbotx-docker-compose.
+name: vinchi-chatbotx
+services:
+  postgres:
+    networks: &id001
+    - main
+    image: timescale/timescaledb-ha:pg18.4-ts2.27.2-all
+    volumes:
+    - db-data:/home/postgres/pgdata
+    command:
+    - postgres
+    - -c
+    - log_statement=none
+    environment:
+      POSTGRES_DB: chatbotx
+      POSTGRES_USER: chatbotx
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run init-config.py}
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+  filesystem:
+    networks: *id001
+    image: rustfs/rustfs:1.0.0-beta.8
+    command: server /data --console-address ":9001"
+    environment:
+      RUSTFS_ACCESS_KEY: vinchi
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+    volumes:
+    - filesystem-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - sh
+      - -c
+      - curl -f http://127.0.0.1:9000/health && curl -f http://127.0.0.1:9001/rustfs/console/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+  filesystem-init:
+    networks: *id001
+    image: rustfs/rc:v0.1.22
+    depends_on:
+      filesystem:
+        condition: service_healthy
+    environment:
+      RUSTFS_ACCESS_KEY: vinchi
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+    entrypoint:
+    - /bin/sh
+    - -ec
+    - rc alias set local http://filesystem:9000 "$${RUSTFS_ACCESS_KEY}" "$${RUSTFS_SECRET_KEY}";
+      rc mb local/chatbotx --ignore-existing; touch /tmp/empty; rc cp /tmp/empty local/chatbotx/public/;
+      rc anonymous set download local/chatbotx/public
+  redis:
+    networks: *id001
+    image: redis:8.8.0-alpine
+    volumes:
+    - redis-data:/data
+    healthcheck:
+      test:
+      - CMD
+      - redis-cli
+      - ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command:
+    - redis-server
+    - --appendonly
+    - 'yes'
+  builder:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      filesystem:
+        condition: service_healthy
+      filesystem-init:
+        condition: service_completed_successfully
+    networks: *id001
+    image: ghcr.io/chatbotxio/chatbotx-builder:${CHATBOTX_VERSION:?Run init-config.py}
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Run init-config.py}
+      BETTER_AUTH_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      DATABASE_URL: postgresql://chatbotx:${POSTGRES_PASSWORD:?Run init-config.py}@postgres:5432/chatbotx?schema=public
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run init-config.py}
+      JAVASCRIPT_EXECUTOR_URL: http://javascript-executor:3210
+      JAVASCRIPT_EXECUTOR_TOKEN: ${JAVASCRIPT_EXECUTOR_TOKEN:?Run init-config.py}
+      NEXT_PUBLIC_BUILDER_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      NEXT_PUBLIC_STORAGE_URL: https://${CHATBOTX_DOMAIN:?Set your domain}/chatbotx
+      NEXT_PUBLIC_EDITION: community
+      NODE_OPTIONS: --max_old_space_size=4096
+      REALTIME_BROADCAST_SECRET: ${REALTIME_BROADCAST_SECRET:?Run init-config.py}
+      REALTIME_INTERNAL_URL: http://realtime:1999
+      REDIS_URL: redis://redis:6379
+      RUN_DB_MIGRATE: 'false'
+      RUN_DB_SEED: 'false'
+      S3_ACCESS_KEY_ID: vinchi
+      S3_BUCKET: chatbotx
+      S3_ENDPOINT: https://${CHATBOTX_DOMAIN:?Set your domain}
+      S3_REGION: us-west-2
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+      SCHEDULER_BUCKET_RANGE: 0-255
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+      SMTP_SERVER: ${SMTP_SERVER:?Set SMTP_SERVER}
+      LOG_LEVEL: info
+      LOG_DEBUG: 'false'
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:3000/api/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  worker:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      filesystem:
+        condition: service_healthy
+      javascript-executor:
+        condition: service_healthy
+    networks:
+    - main
+    - javascript-executor-network
+    image: ghcr.io/chatbotxio/chatbotx-worker:${CHATBOTX_VERSION:?Run init-config.py}
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Run init-config.py}
+      BETTER_AUTH_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      DATABASE_URL: postgresql://chatbotx:${POSTGRES_PASSWORD:?Run init-config.py}@postgres:5432/chatbotx?schema=public
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run init-config.py}
+      JAVASCRIPT_EXECUTOR_URL: http://javascript-executor:3210
+      JAVASCRIPT_EXECUTOR_TOKEN: ${JAVASCRIPT_EXECUTOR_TOKEN:?Run init-config.py}
+      NEXT_PUBLIC_BUILDER_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      NEXT_PUBLIC_STORAGE_URL: https://${CHATBOTX_DOMAIN:?Set your domain}/chatbotx
+      NEXT_PUBLIC_EDITION: community
+      NODE_OPTIONS: --max_old_space_size=4096
+      REALTIME_BROADCAST_SECRET: ${REALTIME_BROADCAST_SECRET:?Run init-config.py}
+      REALTIME_INTERNAL_URL: http://realtime:1999
+      REDIS_URL: redis://redis:6379
+      RUN_DB_MIGRATE: 'false'
+      RUN_DB_SEED: 'false'
+      S3_ACCESS_KEY_ID: vinchi
+      S3_BUCKET: chatbotx
+      S3_ENDPOINT: https://${CHATBOTX_DOMAIN:?Set your domain}
+      S3_REGION: us-west-2
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+      SCHEDULER_BUCKET_RANGE: 0-255
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+      SMTP_SERVER: ${SMTP_SERVER:?Set SMTP_SERVER}
+      LOG_LEVEL: info
+      LOG_DEBUG: 'false'
+    command:
+    - worker
+    - all
+  javascript-executor:
+    image: ghcr.io/chatbotxio/chatbotx-javascript-executor:${CHATBOTX_VERSION:?Run
+      init-config.py}
+    platform: linux/amd64
+    restart: unless-stopped
+    networks:
+    - javascript-executor-network
+    environment:
+      JAVASCRIPT_EXECUTOR_TOKEN: ${JAVASCRIPT_EXECUTOR_TOKEN:?Run init-config.py}
+      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-2}
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    read_only: true
+    tmpfs:
+    - /tmp:size=16m,noexec,nosuid,nodev
+    pids_limit: 128
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+          pids: 128
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:3210/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  realtime:
+    networks: *id001
+    image: ghcr.io/chatbotxio/chatbotx-realtime:${CHATBOTX_VERSION:?Run init-config.py}
+    platform: linux/amd64
+    restart: unless-stopped
+    entrypoint:
+    - /bin/bash
+    - -ec
+    - cd /app/apps/realtime; umask 077; printf "REALTIME_BROADCAST_SECRET=%s\nNEXT_PUBLIC_BUILDER_URL=%s\n"
+      "$${REALTIME_BROADCAST_SECRET}" "$${NEXT_PUBLIC_BUILDER_URL}" > .env; export
+      NODE_OPTIONS=--no-node-snapshot; exec pnpm exec partykit dev --host 0.0.0.0
+      --port 1999
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Run init-config.py}
+      BETTER_AUTH_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      DATABASE_URL: postgresql://chatbotx:${POSTGRES_PASSWORD:?Run init-config.py}@postgres:5432/chatbotx?schema=public
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run init-config.py}
+      JAVASCRIPT_EXECUTOR_URL: http://javascript-executor:3210
+      JAVASCRIPT_EXECUTOR_TOKEN: ${JAVASCRIPT_EXECUTOR_TOKEN:?Run init-config.py}
+      NEXT_PUBLIC_BUILDER_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      NEXT_PUBLIC_STORAGE_URL: https://${CHATBOTX_DOMAIN:?Set your domain}/chatbotx
+      NEXT_PUBLIC_EDITION: community
+      NODE_OPTIONS: --max_old_space_size=4096
+      REALTIME_BROADCAST_SECRET: ${REALTIME_BROADCAST_SECRET:?Run init-config.py}
+      REALTIME_INTERNAL_URL: http://realtime:1999
+      REDIS_URL: redis://redis:6379
+      RUN_DB_MIGRATE: 'false'
+      RUN_DB_SEED: 'false'
+      S3_ACCESS_KEY_ID: vinchi
+      S3_BUCKET: chatbotx
+      S3_ENDPOINT: https://${CHATBOTX_DOMAIN:?Set your domain}
+      S3_REGION: us-west-2
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+      SCHEDULER_BUCKET_RANGE: 0-255
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+      SMTP_SERVER: ${SMTP_SERVER:?Set SMTP_SERVER}
+      LOG_LEVEL: info
+      LOG_DEBUG: 'false'
+  migrate:
+    image: ghcr.io/chatbotxio/chatbotx-builder:${CHATBOTX_VERSION:?Run init-config.py}
+    platform: linux/amd64
+    profiles:
+    - maintenance
+    networks:
+    - main
+    environment:
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Run init-config.py}
+      BETTER_AUTH_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      DATABASE_URL: postgresql://chatbotx:${POSTGRES_PASSWORD:?Run init-config.py}@postgres:5432/chatbotx?schema=public
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?Run init-config.py}
+      JAVASCRIPT_EXECUTOR_URL: http://javascript-executor:3210
+      JAVASCRIPT_EXECUTOR_TOKEN: ${JAVASCRIPT_EXECUTOR_TOKEN:?Run init-config.py}
+      NEXT_PUBLIC_BUILDER_URL: https://${CHATBOTX_DOMAIN:?Set your domain}
+      NEXT_PUBLIC_STORAGE_URL: https://${CHATBOTX_DOMAIN:?Set your domain}/chatbotx
+      NEXT_PUBLIC_EDITION: community
+      NODE_OPTIONS: --max_old_space_size=4096
+      REALTIME_BROADCAST_SECRET: ${REALTIME_BROADCAST_SECRET:?Run init-config.py}
+      REALTIME_INTERNAL_URL: http://realtime:1999
+      REDIS_URL: redis://redis:6379
+      RUN_DB_MIGRATE: 'false'
+      RUN_DB_SEED: 'false'
+      S3_ACCESS_KEY_ID: vinchi
+      S3_BUCKET: chatbotx
+      S3_ENDPOINT: https://${CHATBOTX_DOMAIN:?Set your domain}
+      S3_REGION: us-west-2
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?Run init-config.py}
+      SCHEDULER_BUCKET_RANGE: 0-255
+      SMTP_FROM: ${SMTP_FROM:?Set SMTP_FROM}
+      SMTP_SERVER: ${SMTP_SERVER:?Set SMTP_SERVER}
+      LOG_LEVEL: info
+      LOG_DEBUG: 'false'
+    command:
+    - migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+  proxy:
+    image: caddy:2.10.2-alpine
+    restart: unless-stopped
+    networks:
+    - main
+    ports:
+    - 80:80
+    - 443:443
+    environment:
+      CHATBOTX_DOMAIN: ${CHATBOTX_DOMAIN:?Set your domain}
+      TELEGRAM_BOT_ID: ${TELEGRAM_BOT_ID:-disabled}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?Run init-config.py}
+    volumes:
+    - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    - caddy-data:/data
+    - caddy-config:/config
+    depends_on:
+    - builder
+    - realtime
+networks:
+  main:
+    driver: bridge
+  javascript-executor-network:
+    driver: bridge
+    internal: true
+volumes:
+  db-data: null
+  redis-data: null
+  filesystem-data: null
+  caddy-data: null
+  caddy-config: null
